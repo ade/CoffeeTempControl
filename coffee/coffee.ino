@@ -1,7 +1,9 @@
+#include <PID_v1.h>
+
 
 #define COLD_THRESHOLD 70
-#define COFFEE_TEMPERATURE 95
-#define OVERHEAT_TEMPERATURE 100
+#define COFFEE_TEMPERATURE 97
+#define OVERHEAT_TEMPERATURE 103
 #define STEAM_READY 125         
 
 #define RGB_R 7
@@ -21,15 +23,35 @@
 
 // how many samples to take and average, more takes longer
 // but is more 'smooth'
-#define NUMSAMPLES 2
+#define NUMSAMPLES 4
 // The beta coefficient of the thermistor (usually 3000-4000)
 #define BCOEFFICIENT 3950
 // the value of the 'other' resistor
 #define SERIESRESISTOR 110000    
  
 int samples[NUMSAMPLES];
+
+
+//PID SETUP
+//Define Variables we'll be connecting to
+double PIDSetpoint, PIDInput, PIDOutput;
+
+//Specify the links and initial tuning parameters
+//PID myPID(&PIDInput, &PIDOutput, &PIDSetpoint,1.5,0.05,11.5, DIRECT);
+
+int PIDMax = 3000;
+float lastTemp = 0;
  
 void setup(void) {
+  //PID
+  
+  /*
+  PIDSetpoint = COFFEE_TEMPERATURE;
+  myPID.SetOutputLimits(0, PIDMax);
+  myPID.SetMode(AUTOMATIC);
+  */
+
+  //Other
   Serial.begin(9600);
 
   //Relay Ctrl
@@ -52,11 +74,11 @@ void setup(void) {
   pinMode(RGB_B, OUTPUT);
   digitalWrite(RGB_B, 0);
 }
- 
-void loop(void) {
+
+float getTemperature() {
   uint8_t i;
   float average;
- 
+  
   // take N samples in a row, with a slight delay
   for (i=0; i< NUMSAMPLES; i++) {
    samples[i] = analogRead(THERMISTORPIN);
@@ -70,14 +92,14 @@ void loop(void) {
   }
   average /= NUMSAMPLES;
  
-  Serial.print("Average analog reading "); 
-  Serial.println(average);
+  //Serial.print("Average analog reading "); 
+  //Serial.println(average);
  
   // convert the value to resistance
   average = 1023 / average - 1;
   average = SERIESRESISTOR / average;
-  Serial.print("Thermistor resistance "); 
-  Serial.println(average);
+  //Serial.print("Thermistor resistance "); 
+  //Serial.println(average);
  
   float steinhart;
   steinhart = average / THERMISTORNOMINAL;     // (R/Ro)
@@ -86,7 +108,12 @@ void loop(void) {
   steinhart += 1.0 / (TEMPERATURENOMINAL + 273.15); // + (1/To)
   steinhart = 1.0 / steinhart;                 // Invert
   steinhart -= 273.15;                         // convert to C
+
+  return steinhart;
+}
  
+void loop(void) {
+  float steinhart = getTemperature();
   Serial.print("Temperature "); 
   Serial.print(steinhart);
   Serial.println(" *C");
@@ -117,11 +144,80 @@ void loop(void) {
     blue = true;
   }
 
-  if(heat) {
+  /*
+  //PID
+  PIDInput = steinhart;
+  myPID.Compute();
+
+  int pidTime = (int)PIDOutput;
+  int sleepTime = (int)(PIDMax - PIDOutput);
+
+  Serial.print("On for ");
+  Serial.print(PIDOutput);
+  Serial.print("ms. Sleep for ");
+  Serial.print(sleepTime);
+  Serial.println("ms.");
+
+  if(PIDOutput > 0) {
     analogWrite(A1, 0);
-  } else {
+    delay(pidTime);
+  }
+
+  if(sleepTime > 0) {
+    analogWrite(A1, 255);
+    delay(sleepTime);
+  }
+  */
+
+
+  /************************************************
+  * turn the output pin on/off based on pid output
+  ************************************************/
+  /*
+  unsigned long now = millis();
+  if(now - windowStartTime > WindowSize) { 
+    //time to shift the Relay Window
+    windowStartTime += WindowSize;
+  }
+  if(PIDOutput > now - windowStartTime) {
+    analogWrite(A1, 0);
+  } else { 
     analogWrite(A1, 255);
   }
+  */
+
+ 
+  if(heat) {
+    analogWrite(A1, 0);
+
+    float diff = steinhart - lastTemp;
+    lastTemp = steinhart;
+    bool gaining = false;
+
+    if(diff > 2) {
+      gaining = true;
+    }
+    
+    if(steinhart < 80 || (steinhart < 92 && !gaining)) {
+      delay(2000);
+    } else if(steinhart < 92) {
+      delay(1000);
+      analogWrite(A1, 255);
+      delay(1000);
+    } else if(steinhart < COFFEE_TEMPERATURE-1) {
+      delay(500);
+      analogWrite(A1, 255);
+      delay(1000);
+    } else {
+      delay(500);
+      analogWrite(A1, 255);
+      delay(1500);
+    }
+  } else {
+    analogWrite(A1, 255);
+    delay(1000);
+  }
+  
 
   if(!red) {
     digitalWrite(RGB_R, 1);
