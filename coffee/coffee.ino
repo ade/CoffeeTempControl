@@ -1,14 +1,24 @@
 
-#define COFFEE_TEMPERATURE 95         
+#define COLD_THRESHOLD 70
+#define COFFEE_TEMPERATURE 95
+#define OVERHEAT_TEMPERATURE 100
+#define STEAM_READY 125         
+
+#define RGB_R 7
+#define RGB_G 8
+#define RGB_B 9
 
 // which analog pin to connect
 #define THERMISTORPIN A0         
 // resistance at 25 degrees C
-#define THERMISTORNOMINAL 61370
-//#define THERMISTORNOMINAL 327755
 // temp. for nominal resistance (almost always 25 C)
+
+#define THERMISTORNOMINAL 61370
 #define TEMPERATURENOMINAL 36.7
-//#define TEMPERATURENOMINAL 0
+
+//#define THERMISTORNOMINAL 100000
+//#define TEMPERATURENOMINAL 25
+
 // how many samples to take and average, more takes longer
 // but is more 'smooth'
 #define NUMSAMPLES 2
@@ -32,6 +42,15 @@ void setup(void) {
   //Thermistor GND
   pinMode(A3, OUTPUT);
   analogWrite(A3, 0);
+
+  pinMode(RGB_R, OUTPUT);
+  digitalWrite(RGB_R, 1);
+
+  pinMode(RGB_G, OUTPUT);
+  digitalWrite(RGB_G, 0);
+
+  pinMode(RGB_B, OUTPUT);
+  digitalWrite(RGB_B, 0);
 }
  
 void loop(void) {
@@ -73,13 +92,60 @@ void loop(void) {
   Serial.println(" *C");
 
   analogWrite(1, 255);
+  bool heat = false;
+  bool ledblink = false;
+  bool red = false;
+  bool blue = false;
+  bool green = false;
   
-  if(steinhart > COFFEE_TEMPERATURE) {
-    analogWrite(A1, 255);
-  } else {
-    analogWrite(A1, 0);
+  if(steinhart < COLD_THRESHOLD) {
+    blue = true;
+    heat = true;
+  } else if(steinhart >= COLD_THRESHOLD && steinhart < COFFEE_TEMPERATURE) {
+    red = true;
+    heat = true;
+  } else if(steinhart >= COFFEE_TEMPERATURE && steinhart < OVERHEAT_TEMPERATURE) {  
+    green = true;
+    heat = false;
+  } else if(steinhart >= OVERHEAT_TEMPERATURE && steinhart < STEAM_READY) {  
+    green = true;
+    ledblink = true;
+    heat = false;
+  } else if(steinhart >= STEAM_READY) {
+    heat = false;
+    green = true;
+    blue = true;
   }
-  
- 
-  delay(1000);
+
+  if(heat) {
+    analogWrite(A1, 0);
+  } else {
+    analogWrite(A1, 255);
+  }
+
+  if(!red) {
+    digitalWrite(RGB_R, 1);
+  }
+  if(!green) {
+    digitalWrite(RGB_G, 1);
+  }
+  if(!blue) {
+    digitalWrite(RGB_B, 1);
+  }
+
+  if(ledblink) {   
+    if(red) digitalWrite(RGB_R,0);
+    if(green) digitalWrite(RGB_G,0);
+    if(blue) digitalWrite(RGB_B,0);
+    delay(500);
+    digitalWrite(RGB_R,1);
+    digitalWrite(RGB_G,1);
+    digitalWrite(RGB_B,1);
+    delay(500);
+  } else {
+    if(red) digitalWrite(RGB_R,0);
+    if(green) digitalWrite(RGB_G,0);
+    if(blue) digitalWrite(RGB_B,0);
+    delay(1000);
+  }
 }
